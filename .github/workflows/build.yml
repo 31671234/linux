@@ -1,21 +1,52 @@
 name: Build
-on: [workflow_dispatch]
+
+on:
+workflow_dispatch
+
+permissions:
+contents: write
+
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [arm64, arm]
-        compiler: [gcc, clang]
+build:
+runs-on: ubuntu-latest
+
+```
+strategy:
+  fail-fast: false
+  matrix:
+    arch: [arm64, arm]
+    compiler: [gcc, clang]
+
+env:
+  ARCH: ${{ matrix.arch }}
+
+steps:
+  - uses: actions/checkout@v3
+
+  - uses: jirutka/setup-alpine@v1
+
+  - name: Prepare build environment
+    run: ./.ci-prepare.sh ${{ matrix.compiler }}
+    shell: alpine.sh --root {0}
+
+  - name: Build
+    run: ./.ci-build.sh
+    shell: alpine.sh {0}
+
+  - name: Collect files
+    run: |
+      mkdir -p release
+      find . -type f \
+        ! -path "./.git/*" \
+        ! -path "./release/*" \
+        -size +0c \
+        -exec cp --parents {} release/ \;
+
+  - name: Create Release
+    uses: softprops/action-gh-release@v2
+    with:
+      tag_name: build-${{ github.run_number }}
+      files: release/**/*
     env:
-      ARCH: ${{ matrix.arch }}
-    steps:
-    - uses: actions/checkout@v3
-    - uses: jirutka/setup-alpine@v1
-    - name: Prepare build environment
-      run: ./.ci-prepare.sh ${{ matrix.compiler }}
-      shell: alpine.sh --root {0}
-    - name: Build
-      run: ./.ci-build.sh
-      shell: alpine.sh {0}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
